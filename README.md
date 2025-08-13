@@ -16,8 +16,10 @@ DigitalOcean Cloud Controller Manager applies annotation changes to the actual L
 
 ## Prerequisites
 
-- Install the DigitalOcean Marketplace Metrics Server: [Kubernetes Metrics Server](https://marketplace.digitalocean.com/apps/kubernetes-metrics-server)
-- Install a Prometheus stack (for scraping ingress metrics): [Kubernetes Monitoring Stack (kube-prometheus-stack)](https://marketplace.digitalocean.com/apps/kubernetes-monitoring-stack)
+- Install from the DigitalOcean Kubernetes Marketplace:
+  - [Kubernetes Metrics Server](https://marketplace.digitalocean.com/apps/kubernetes-metrics-server)
+  - [Kubernetes Monitoring Stack](https://marketplace.digitalocean.com/apps/kubernetes-monitoring-stack) (kube-prometheus-stack)
+  - [Nginx Ingress Controller](https://marketplace.digitalocean.com/apps/nginx-ingress-controller) (optional, any ingress controller should work)
 
 ## Required annotations
 
@@ -25,7 +27,7 @@ DigitalOcean Cloud Controller Manager applies annotation changes to the actual L
 - `doks-lb-scale/metric`: the metric to use. Must be a Prometheus query prefixed with `promql:`.
 - `doks-lb-scale/target-per-node`: REQUIRED: `req=<int>` (requests per second per node target)
 
-Only HTTP/ingress metrics are supported. NLB throughput-based scaling is no longer supported.
+Only HTTP/ingress metrics are supported.
 
 Optional annotations:
 - `doks-lb-scale/hysteresis-percent`: default `20`.
@@ -101,16 +103,6 @@ kubectl apply -f config/deployment.yaml
 
 Set the Prometheus URL via the `--prom-url` flag or `PROMETHEUS_URL` env var. The provided deployment sets `PROMETHEUS_URL` to `http://ingress-nginx-controller-metrics:9090` by default; adjust to your cluster.
 
-## Contributing
-
-### Build and push container image (for contributors)
-
-```bash
-# Build multi-arch image (adjust registry/name as needed)
-IMAGE=ghcr.io/your-org/doks-lb-scale:latest
-docker build --platform linux/amd64,linux/arm64 -t $IMAGE --push .
-```
-
 After pushing, update `config/deployment.yaml` to point to your published image.
 
 ## Notes
@@ -130,6 +122,12 @@ If desired is within [lower, upper], nothing changes.
 Quick examples:
 - current 10, pct 20% → window [8,12]; desired 12 = no change; 13 = scale up; 7 = scale down
 - current 5, pct 10% → window [4,5]; desired 4 = no change; 6 = scale up; 3 = scale down
-- current 1, pct 20% → window [0,1]; desired 1 = no change; ≥2 = scale up (min-nodes still applies)
+- current 1, pct 20% → window [0,1]; desired 1 = no change; ≥2 = scale up (min-nodes still applies)`
 
-Notes: integer truncation is used; min/max nodes are enforced.
+## Contact
+
+If you wish to learn more about DigitalOcean's services, you are welcome to reach out to the sales team at sales@digitalocean.com. A global team of talented engineers will be happy to provide assistance.
+
+## License
+
+This GitHub Action and associated scripts and documentation in this project are released under the MIT License.
