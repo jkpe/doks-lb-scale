@@ -254,9 +254,11 @@ func main() {
 	var doToken string
 	var addr string
 	var verboseFlag bool
+	var promURL string
 	flag.StringVar(&doToken, "do-token", os.Getenv("DIGITALOCEAN_TOKEN"), "DigitalOcean API token")
 	flag.StringVar(&addr, "bind", ":8080", "healthz bind address")
 	flag.BoolVar(&verboseFlag, "verbose", false, "enable verbose logging")
+	flag.StringVar(&promURL, "prom-url", os.Getenv("PROMETHEUS_URL"), "Prometheus base URL, e.g. http://prometheus-server.monitoring.svc:9090")
 	opts := zap.Options{Development: false}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -276,7 +278,11 @@ func main() {
 	}
 
 	verbose := verboseFlag || envBool("DOKS_LB_SCALE_VERBOSE")
-	reconciler := &Reconciler{Client: mgr.GetClient(), Metrics: &DOClient{APIToken: doToken}, Verbose: verbose}
+	metricsClient := &MuxMetrics{DO: &DOClient{APIToken: doToken}}
+	if strings.TrimSpace(promURL) != "" {
+		metricsClient.Prom = &PromClient{BaseURL: promURL}
+	}
+	reconciler := &Reconciler{Client: mgr.GetClient(), Metrics: metricsClient, Verbose: verbose}
 	if err := builder.ControllerManagedBy(mgr).
 		For(&corev1.Service{}, builder.WithPredicates(serviceHasLBAnnotations())).
 		Complete(reconciler); err != nil {
