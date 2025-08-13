@@ -7,12 +7,17 @@ A lightweight Kubernetes controller that automatically scales a DigitalOcean Loa
 ## How it works
 
 - Watches `Service` objects of type `LoadBalancer` that include required annotations.
-- Periodically fetches the configured metric for the referenced Load Balancer ID.
-  - When `doks-lb-scale/metric` starts with `promql:`, the query is executed against Prometheus.
+- Periodically fetches the configured Prometheus query.
+  - `nginx_ingress_controller_requests` used as an example.
 - Uses HTTP-style ingress metrics (e.g., total requests per second) to compute desired nodes.
 - Computes the desired `size_unit` with hysteresis and min/max bounds and writes it back to the Service annotation.
 
 DigitalOcean Cloud Controller Manager applies annotation changes to the actual Load Balancer.
+
+## Prerequisites
+
+- Install the DigitalOcean Marketplace Metrics Server: [Kubernetes Metrics Server](https://marketplace.digitalocean.com/apps/kubernetes-metrics-server)
+- Install a Prometheus stack (for scraping ingress metrics): [Kubernetes Monitoring Stack (kube-prometheus-stack)](https://marketplace.digitalocean.com/apps/kubernetes-monitoring-stack)
 
 ## Required annotations
 
