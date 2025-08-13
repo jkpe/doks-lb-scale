@@ -1,0 +1,21 @@
+# Go build cache and artifacts
+**/.git
+.git
+.gitignore
+bin
+build
+dist
+out
+*.exe
+*.test
+*.out
+*.log
+
+# IDE/editor
+.vscode
+.idea
+*.swp
+
+# Modules cache (not needed once downloaded)
+$GOMOD/cache
+

@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: doks-lb-scale-controller
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: doks-lb-scale-controller
+  template:
+    metadata:
+      labels:
+        app: doks-lb-scale-controller
+    spec:
+      serviceAccountName: doks-lb-scale-controller
+      imagePullSecrets:
+        - name: strapi-jkpe
+      containers:
+        - name: controller
+          image: registry.digitalocean.com/strapi-jkpe/doks-lb-scale:latest
+          imagePullPolicy: Always
+          args:
+            - "--do-token=$(DIGITALOCEAN_LB_SCALE_TOKEN)"
+            - "--verbose=$(DOKS_LB_SCALE_VERBOSE)"
+          env:
+            - name: DIGITALOCEAN_LB_SCALE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: digitalocean-lb-scale
+                  key: token
+            - name: DOKS_LB_SCALE_VERBOSE
+              value: "true"
+          ports:
+            - name: healthz
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: healthz
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 10
+            periodSeconds: 10
