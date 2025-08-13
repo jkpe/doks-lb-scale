@@ -25,13 +25,15 @@ import (
 )
 
 const (
-	AnnotationLoadBalancerID = "kubernetes.digitalocean.com/load-balancer-id"
-	AnnotationSizeUnit       = "service.beta.kubernetes.io/do-loadbalancer-size-unit"
-	AnnotationMetric         = "doks-lb-scale/metric"
-	AnnotationTargetPerNode  = "doks-lb-scale/target-per-node"    // required: "req=INT" or "nlb=INT"
-	AnnotationHysteresisPct  = "doks-lb-scale/hysteresis-percent" // default 20
-	AnnotationMinNodes       = "doks-lb-scale/min-nodes"          // default 1
-	AnnotationMaxNodes       = "doks-lb-scale/max-nodes"          // default 200
+	AnnotationLoadBalancerID     = "kubernetes.digitalocean.com/load-balancer-id"
+	AnnotationSizeUnit           = "service.beta.kubernetes.io/do-loadbalancer-size-unit"
+	AnnotationMetric             = "doks-lb-scale/metric"
+	AnnotationTargetPerNode      = "doks-lb-scale/target-per-node"          // required: "req=INT" or "nlb=INT"
+	AnnotationHysteresisPct      = "doks-lb-scale/hysteresis-percent"       // default 20
+	AnnotationMinNodes           = "doks-lb-scale/min-nodes"                // default 1
+	AnnotationMaxNodes           = "doks-lb-scale/max-nodes"                // default 200
+	AnnotationScaleDownDelayMin  = "doks-lb-scale/scale-down-delay-minutes" // optional; default 0 (no delay)
+	AnnotationScaleDownNotBefore = "doks-lb-scale/scale-down-not-before"    // controller-managed RFC3339 timestamp
 )
 
 var (
@@ -47,11 +49,7 @@ type MetricsClient interface {
 	GetValue(ctx context.Context, lbID string, metric string) (float64, error)
 }
 
-type DOClient struct {
-	APIToken string
-}
-
-// Implementation in do_client.go
+// Prometheus implementation in prom_client.go
 
 type Reconciler struct {
 	client.Client
@@ -79,15 +77,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, nil
 	}
 
-	category := categoryFromMetric(metric) // "req" or "nlb"
-	if category == "nlb" && !isThroughputMetric(metric) {
-		klog.InfoS("skipping scale: NLB requires throughput metric", "metric", metric, "service", req.NamespacedName)
-		return reconcile.Result{RequeueAfter: 60 * time.Second}, nil
-	}
-
-	targetPerNode, ok := resolveStrictTargetPerNode(rawTarget, category)
+	// Only ingress/HTTP style metrics via Prometheus are supported. Require req=INT.
+	targetPerNode, ok := resolveStrictTargetPerNode(rawTarget)
 	if !ok {
-		klog.InfoS("skipping scale: target-per-node must specify exactly one of req= or nlb= and match metric category", "target", rawTarget, "category", category, "service", req.NamespacedName)
+		klog.InfoS("skipping scale: target-per-node must be req=INT", "target", rawTarget, "service", req.NamespacedName)
 		return reconcile.Result{RequeueAfter: 60 * time.Second}, nil
 	}
 
@@ -130,6 +123,81 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{RequeueAfter: 30 * time.Second}, nil
 	}
 
+	// Handle optional scale-down delay when decreasing size
+	if desired < current {
+		delayMinutes := parseIntDefault(ann[AnnotationScaleDownDelayMin], 0)
+		if delayMinutes > 0 {
+			// Ensure annotations map exists for potential writes
+			if svc.Annotations == nil {
+				svc.Annotations = map[string]string{}
+			}
+			notBeforeStr := strings.TrimSpace(svc.Annotations[AnnotationScaleDownNotBefore])
+			now := time.Now().UTC()
+			if notBeforeStr == "" {
+				notBefore := now.Add(time.Duration(delayMinutes) * time.Minute)
+				svc.Annotations[AnnotationScaleDownNotBefore] = notBefore.Format(time.RFC3339)
+				if r.Verbose {
+					klog.InfoS("scale down scheduled after delay", "delayMinutes", delayMinutes, "notBefore", svc.Annotations[AnnotationScaleDownNotBefore], "from", current, "to", desired, "service", req.NamespacedName)
+				}
+				if err := r.Update(ctx, &svc); err != nil {
+					klog.ErrorS(err, "failed to set scale-down not-before annotation")
+					return reconcile.Result{RequeueAfter: time.Minute}, nil
+				}
+				return reconcile.Result{RequeueAfter: 15 * time.Second}, nil
+			}
+			notBefore, perr := time.Parse(time.RFC3339, notBeforeStr)
+			if perr != nil {
+				// Reset malformed value
+				notBefore := now.Add(time.Duration(delayMinutes) * time.Minute)
+				svc.Annotations[AnnotationScaleDownNotBefore] = notBefore.Format(time.RFC3339)
+				if r.Verbose {
+					klog.InfoS("reset malformed scale-down not-before", "value", notBeforeStr, "setTo", svc.Annotations[AnnotationScaleDownNotBefore], "service", req.NamespacedName)
+				}
+				if err := r.Update(ctx, &svc); err != nil {
+					klog.ErrorS(err, "failed to reset scale-down not-before annotation")
+					return reconcile.Result{RequeueAfter: time.Minute}, nil
+				}
+				return reconcile.Result{RequeueAfter: 15 * time.Second}, nil
+			}
+			if now.Before(notBefore) {
+				// Still waiting
+				remaining := time.Until(notBefore)
+				if r.Verbose {
+					klog.InfoS("delaying scale down", "remaining", remaining.String(), "notBefore", notBeforeStr, "from", current, "to", desired, "service", req.NamespacedName)
+				}
+				// Requeue no later than remaining, but avoid very long sleeps
+				requeue := remaining
+				if requeue > 60*time.Second {
+					requeue = 60 * time.Second
+				} else if requeue < 5*time.Second {
+					requeue = 5 * time.Second
+				}
+				return reconcile.Result{RequeueAfter: requeue}, nil
+			}
+			// Past not-before; proceed to scale down and clear flag
+			if svc.Annotations == nil {
+				svc.Annotations = map[string]string{}
+			}
+			delete(svc.Annotations, AnnotationScaleDownNotBefore)
+		} else {
+			// No delay configured; ensure any lingering flag is cleared
+			if svc.Annotations != nil && svc.Annotations[AnnotationScaleDownNotBefore] != "" {
+				if r.Verbose {
+					klog.InfoS("clearing stale scale-down not-before (no delay configured)", "service", req.NamespacedName)
+				}
+				delete(svc.Annotations, AnnotationScaleDownNotBefore)
+				// best-effort update; continue regardless of error
+				_ = r.Update(ctx, &svc)
+			}
+		}
+	} else {
+		// Scaling up or same: clear any pending scale-down gate
+		if svc.Annotations != nil && svc.Annotations[AnnotationScaleDownNotBefore] != "" {
+			delete(svc.Annotations, AnnotationScaleDownNotBefore)
+			_ = r.Update(ctx, &svc)
+		}
+	}
+
 	if svc.Annotations == nil {
 		svc.Annotations = map[string]string{}
 	}
@@ -164,8 +232,8 @@ func computeDesiredNodes(ann map[string]string, targetPerNode int, metricValue f
 }
 
 // resolveStrictTargetPerNode enforces required keyed single-entry config.
-// raw must be either "req=INT" or "nlb=INT"; returns value only if key matches category.
-func resolveStrictTargetPerNode(raw string, category string) (int, bool) {
+// Only "req=INT" is supported when relying on ingress metrics.
+func resolveStrictTargetPerNode(raw string) (int, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return 0, false
@@ -180,29 +248,13 @@ func resolveStrictTargetPerNode(raw string, category string) (int, bool) {
 	}
 	key := strings.ToLower(strings.TrimSpace(kv[0]))
 	val := strings.TrimSpace(kv[1])
-	if key != "req" && key != "nlb" {
-		return 0, false
-	}
-	if key != category {
+	if key != "req" {
 		return 0, false
 	}
 	return parseIntDefault(val, 0), true
 }
 
-// categoryFromMetric maps metrics to logical categories used for target-per-node keys.
-// Returns "nlb" for NLB throughput metrics, otherwise "req".
-func categoryFromMetric(metric string) string {
-	m := strings.ToLower(metric)
-	if isThroughputMetric(m) {
-		return "nlb"
-	}
-	return "req"
-}
-
-func isThroughputMetric(metric string) bool {
-	m := strings.ToLower(metric)
-	return strings.Contains(m, "nlb_tcp_network_throughput") || strings.Contains(m, "nlb_udp_network_throughput")
-}
+// No category detection needed; only req-based scaling supported.
 
 func parseIntDefault(s string, def int) int {
 	if s == "" {
@@ -251,11 +303,9 @@ func clamp(v, min, max int) int {
 }
 
 func main() {
-	var doToken string
 	var addr string
 	var verboseFlag bool
 	var promURL string
-	flag.StringVar(&doToken, "do-token", os.Getenv("DIGITALOCEAN_TOKEN"), "DigitalOcean API token")
 	flag.StringVar(&addr, "bind", ":8080", "healthz bind address")
 	flag.BoolVar(&verboseFlag, "verbose", false, "enable verbose logging")
 	flag.StringVar(&promURL, "prom-url", os.Getenv("PROMETHEUS_URL"), "Prometheus base URL, e.g. http://prometheus-server.monitoring.svc:9090")
@@ -278,10 +328,7 @@ func main() {
 	}
 
 	verbose := verboseFlag || envBool("DOKS_LB_SCALE_VERBOSE")
-	metricsClient := &MuxMetrics{DO: &DOClient{APIToken: doToken}}
-	if strings.TrimSpace(promURL) != "" {
-		metricsClient.Prom = &PromClient{BaseURL: promURL}
-	}
+	metricsClient := &PromClient{BaseURL: strings.TrimSpace(promURL)}
 	reconciler := &Reconciler{Client: mgr.GetClient(), Metrics: metricsClient, Verbose: verbose}
 	if err := builder.ControllerManagedBy(mgr).
 		For(&corev1.Service{}, builder.WithPredicates(serviceHasLBAnnotations())).
