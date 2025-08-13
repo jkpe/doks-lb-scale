@@ -130,4 +130,4 @@ If you wish to learn more about DigitalOcean's services, you are welcome to reac
 
 ## License
 
-This GitHub Action and associated scripts and documentation in this project are released under the MIT License.
+This Kubernetes controller, associated scripts and documentation in this project are released under the MIT License.
