@@ -14,11 +14,9 @@ spec:
         app: doks-lb-scale-controller
     spec:
       serviceAccountName: doks-lb-scale-controller
-      imagePullSecrets:
-        - name: strapi-jkpe
       containers:
         - name: controller
-          image: registry.digitalocean.com/strapi-jkpe/doks-lb-scale:latest
+          image: ghcr.io/jkpe/doks-lb-scale:latest
           imagePullPolicy: Always
           args:
             - "--verbose=$(DOKS_LB_SCALE_VERBOSE)"
