@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  annotations:
+    kubernetes.digitalocean.com/load-balancer-id: "your-load-balancer-id"
+    service.beta.kubernetes.io/do-loadbalancer-size-unit: "1"
+    # Scale by total requests per second observed by nginx ingress controller
+    doks-lb-scale/metric: "promql:sum(rate(nginx_ingress_controller_requests{ingress!=\"\",status!=\"\"}[1m]))"
+    doks-lb-scale/target-per-node: "req=8000"
+    doks-lb-scale/hysteresis-percent: "20"
+    doks-lb-scale/min-nodes: "1"
+    doks-lb-scale/max-nodes: "50"
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx
+  ports:
+    - port: 80
+      targetPort: 80

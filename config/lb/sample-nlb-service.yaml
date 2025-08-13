@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-nlb
+  namespace: default
+  annotations:
+    # For more information, see: https://github.com/digitalocean/digitalocean-cloud-controller-manager/blob/master/docs/controllers/services/annotations.md
+    kubernetes.digitalocean.com/load-balancer-id: "your-load-balancer-id"
+    service.beta.kubernetes.io/do-loadbalancer-type: "REGIONAL_NETWORK"
+    service.beta.kubernetes.io/do-loadbalancer-size-unit: "1"
+    doks-lb-scale/metric: "frontend_nlb_tcp_network_throughput"
+    doks-lb-scale/target-per-node: "nlb=40"
+    doks-lb-scale/hysteresis-percent: "10"
+    doks-lb-scale/min-nodes: "1"
+    doks-lb-scale/max-nodes: "20"
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx
+  ports:
+    - port: 80
+      targetPort: 80

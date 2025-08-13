@@ -10,6 +10,7 @@ out
 *.test
 *.out
 *.log
+config/
 
 # IDE/editor
 .vscode

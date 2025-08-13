@@ -1,10 +1,13 @@
 # doks-lb-scale
 
-A lightweight Kubernetes controller that automatically scales a DigitalOcean Load Balancer node size (size unit) based on metrics from DigitalOcean Monitoring.
+A lightweight Kubernetes controller that automatically scales a DigitalOcean Load Balancer node size (size unit) based on metrics from DigitalOcean Monitoring or Prometheus.
 
 ## How it works
+
 - Watches `Service` objects of type `LoadBalancer` that include required annotations.
-- Periodically fetches the configured DigitalOcean metric for the referenced Load Balancer ID.
+- Periodically fetches the configured metric for the referenced Load Balancer ID.
+  - When `doks-lb-scale/metric` starts with `promql:`, the query is executed against Prometheus.
+  - Otherwise, the metric is fetched from DigitalOcean Monitoring.
 - Infers scaling category from the metric:
   - Throughput metrics (`frontend_nlb_{tcp,udp}_network_throughput`) are treated as NLB.
   - Other metrics (e.g., `frontend_http_requests_per_second`, `frontend_connections_current`) are treated as HTTP requests.
@@ -13,8 +16,9 @@ A lightweight Kubernetes controller that automatically scales a DigitalOcean Loa
 DigitalOcean Cloud Controller Manager applies annotation changes to the actual Load Balancer.
 
 ## Required annotations
+
 - `kubernetes.digitalocean.com/load-balancer-id`: the DO LB ID.
-- `doks-lb-scale/metric`: the DO Monitoring metric to use.
+- `doks-lb-scale/metric`: the metric to use. Either a DO Monitoring metric name (e.g., `frontend_http_requests_per_second`) or a Prometheus query prefixed with `promql:`.
 - `doks-lb-scale/target-per-node`: REQUIRED, must be exactly one of:
   - `req=<int>`: requests per second per node target (used for HTTP-style metrics)
   - `nlb=<int>`: Mbps per node target (used for NLB throughput metrics)
@@ -28,6 +32,7 @@ Optional annotations:
 - `service.beta.kubernetes.io/do-loadbalancer-size-unit`: set by controller.
 
 ## Example Service (HTTP requests)
+
 ```yaml
 apiVersion: v1
 kind: Service
@@ -50,7 +55,61 @@ spec:
       targetPort: 80
 ```
 
+## Example Service using Prometheus/nginx ingress
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  annotations:
+    kubernetes.digitalocean.com/load-balancer-id: "your-load-balancer-id"
+    service.beta.kubernetes.io/do-loadbalancer-size-unit: "1"
+    # Scale by total requests per second observed by nginx ingress controller
+    doks-lb-scale/metric: "promql:sum(rate(nginx_ingress_controller_requests{ingress!=\"\",status!=\"\"}[1m]))"
+    doks-lb-scale/target-per-node: "req=8000"
+    doks-lb-scale/hysteresis-percent: "20"
+    doks-lb-scale/min-nodes: "1"
+    doks-lb-scale/max-nodes: "50"
+spec:
+  type: LoadBalancer
+  selector:
+    app: nginx
+  ports:
+    - port: 80
+      targetPort: 80
+```
+
+## Example ingress-nginx Helm values
+
+Use the following Helm values to deploy `ingress-nginx` with a `LoadBalancer` Service, metrics enabled for Prometheus scraping, and the required annotations for doks-lb-scale to manage the Load Balancer size:
+
+```yaml
+controller:
+  replicaCount: 2
+  service:
+    type: LoadBalancer
+    annotations:
+      kubernetes.digitalocean.com/load-balancer-id: "your-load-balancer-id"
+      doks-lb-scale/metric: "promql:sum(rate(nginx_ingress_controller_requests{ingress!=\"\",status!=\"\"}[1m]))"
+      doks-lb-scale/target-per-node: "req=8000"
+      doks-lb-scale/hysteresis-percent: "20"
+      doks-lb-scale/min-nodes: "1"
+      doks-lb-scale/max-nodes: "50"
+      service.beta.kubernetes.io/do-loadbalancer-size-unit: "1"
+  metrics:
+    enabled: true
+    service:
+      servicePort: "9090"
+  podAnnotations:
+    prometheus.io/port: "10254"
+    prometheus.io/scrape: "true"
+```
+
+Pair this with the Prometheus-based example in the previous section (using `promql:sum(rate(nginx_ingress_controller_requests{ingress!="",status!=""}[1m]))`).
+
 ## Example Service (NLB throughput)
+
 ```yaml
 apiVersion: v1
 kind: Service
@@ -87,10 +146,13 @@ kubectl -n kube-system create secret generic digitalocean-lb-scale --from-litera
 ```
 - Apply RBAC and Deployment:
 
+ 
 ```bash
 kubectl apply -f config/rbac.yaml
 kubectl apply -f config/deployment.yaml
 ```
+
+If using Prometheus, set the Prometheus URL via the `--prom-url` flag or `PROMETHEUS_URL` env var. The provided deployment sets `PROMETHEUS_URL` to `http://prometheus-server.monitoring.svc:9090` by default; adjust to your cluster.
 
 ## Contributing
 
@@ -105,8 +167,10 @@ docker build --platform linux/amd64,linux/arm64 -t $IMAGE --push .
 After pushing, update `config/deployment.yaml` to point to your published image.
 
 ## Notes
+
 - NLBs only scale when using throughput metrics. If a non-throughput metric is used with `nlb=<int>`, scaling is skipped and logged.
 - The controller queries DO Monitoring using `GET /v2/monitoring/metrics/load_balancer/{metric}?lb_id=...&start=...&end=...` with epoch seconds, and uses the latest datapoint.
+- When using Prometheus, the controller performs an instant query via `/api/v1/query?query=...` and uses the value from the first result.
 - Up to date LB service annotations: [DigitalOcean CCM annotations](https://github.com/digitalocean/digitalocean-cloud-controller-manager/blob/master/docs/controllers/services/annotations.md)
 
 ## Hysteresis examples

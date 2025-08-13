@@ -23,6 +23,7 @@ spec:
           args:
             - "--do-token=$(DIGITALOCEAN_LB_SCALE_TOKEN)"
             - "--verbose=$(DOKS_LB_SCALE_VERBOSE)"
+            - "--prom-url=$(PROMETHEUS_URL)"
           env:
             - name: DIGITALOCEAN_LB_SCALE_TOKEN
               valueFrom:
@@ -31,6 +32,8 @@ spec:
                   key: token
             - name: DOKS_LB_SCALE_VERBOSE
               value: "true"
+            - name: PROMETHEUS_URL
+              value: "http://ingress-nginx-controller-metrics:9090"
           ports:
             - name: healthz
               containerPort: 8080
