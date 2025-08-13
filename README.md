@@ -1,5 +1,7 @@
 # doks-lb-scale
 
+https://github.com/user-attachments/assets/9ab9f805-df87-49f1-98b4-edceb66a5b2f
+
 A lightweight Kubernetes controller that automatically scales a DigitalOcean Load Balancer node size (size unit) based on Prometheus metrics from your ingress controller.
 
 ## How it works
