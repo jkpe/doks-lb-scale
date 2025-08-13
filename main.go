@@ -34,6 +34,9 @@ const (
 	AnnotationMaxNodes           = "doks-lb-scale/max-nodes"                // default 200
 	AnnotationScaleDownDelayMin  = "doks-lb-scale/scale-down-delay-minutes" // optional; default 0 (no delay)
 	AnnotationScaleDownNotBefore = "doks-lb-scale/scale-down-not-before"    // controller-managed RFC3339 timestamp
+	// Global resize cooldown to avoid provider rate limits
+	AnnotationMinResizeIntervalMin = "doks-lb-scale/min-resize-interval-minutes" // optional; default 0 (no cooldown)
+	AnnotationResizeNotBefore      = "doks-lb-scale/resize-not-before"           // controller-managed RFC3339 timestamp
 )
 
 var (
@@ -198,6 +201,28 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		}
 	}
 
+	// Enforce global resize cooldown regardless of direction
+	if svc.Annotations == nil {
+		svc.Annotations = map[string]string{}
+	}
+	if nb := strings.TrimSpace(svc.Annotations[AnnotationResizeNotBefore]); nb != "" {
+		now := time.Now().UTC()
+		notBefore, perr := time.Parse(time.RFC3339, nb)
+		if perr == nil && now.Before(notBefore) {
+			remaining := time.Until(notBefore)
+			if r.Verbose {
+				klog.InfoS("cooldown in effect, skipping resize", "remaining", remaining.String(), "notBefore", nb, "from", current, "to", desired, "service", req.NamespacedName)
+			}
+			requeue := remaining
+			if requeue > 60*time.Second {
+				requeue = 60 * time.Second
+			} else if requeue < 5*time.Second {
+				requeue = 5 * time.Second
+			}
+			return reconcile.Result{RequeueAfter: requeue}, nil
+		}
+	}
+
 	if svc.Annotations == nil {
 		svc.Annotations = map[string]string{}
 	}
@@ -205,7 +230,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		klog.InfoS("updating service size-unit", "from", current, "to", desired, "service", req.NamespacedName)
 	}
 	svc.Annotations[AnnotationSizeUnit] = itoa(desired)
+	// If a cooldown interval is configured, set a not-before timestamp now to guard subsequent reconciles
+	if minIntervalMin := parseIntDefault(svc.Annotations[AnnotationMinResizeIntervalMin], 0); minIntervalMin > 0 {
+		notBefore := time.Now().UTC().Add(time.Duration(minIntervalMin) * time.Minute)
+		svc.Annotations[AnnotationResizeNotBefore] = notBefore.Format(time.RFC3339)
+	}
 	if err := r.Update(ctx, &svc); err != nil {
+		// Handle provider rate limit style errors by scheduling next allowed time
+		handled, requeueAfter := r.handleResizeRateLimited(ctx, &svc, current, err)
+		if handled {
+			return reconcile.Result{RequeueAfter: requeueAfter}, nil
+		}
 		klog.ErrorS(err, "failed to update service annotation")
 		return reconcile.Result{RequeueAfter: time.Minute}, nil
 	}
@@ -213,6 +248,75 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		klog.InfoS("service annotation updated", "size-unit", desired, "service", req.NamespacedName)
 	}
 	return reconcile.Result{RequeueAfter: 15 * time.Second}, nil
+}
+
+// handleResizeRateLimited attempts to detect a provider resize rate limit error
+// and sets a controller-managed cooldown to avoid hammering the API. It also
+// rolls back the optimistic size change to the previous value so further
+// reconciles do not attempt to resize until the cooldown expires.
+func (r *Reconciler) handleResizeRateLimited(ctx context.Context, svc *corev1.Service, previous int, updateErr error) (bool, time.Duration) {
+	if updateErr == nil {
+		return false, 0
+	}
+	msg := strings.ToLower(updateErr.Error())
+	if !strings.Contains(msg, "load balancer can not be resized this often") && !strings.Contains(msg, "429") {
+		return false, 0
+	}
+	// Try to parse provider "next available resize at" timestamp if present
+	nextAt, ok := parseNextAvailableTime(updateErr.Error())
+	if !ok {
+		// Fall back to configured cooldown or 60s
+		requeue := 60 * time.Second
+		if svc.Annotations != nil {
+			if minIntervalMin := parseIntDefault(svc.Annotations[AnnotationMinResizeIntervalMin], 0); minIntervalMin > 0 {
+				requeue = time.Duration(minIntervalMin) * time.Minute
+			}
+		}
+		// Roll back size change and set not-before
+		if svc.Annotations == nil {
+			svc.Annotations = map[string]string{}
+		}
+		svc.Annotations[AnnotationSizeUnit] = itoa(previous)
+		svc.Annotations[AnnotationResizeNotBefore] = time.Now().UTC().Add(requeue).Format(time.RFC3339)
+		_ = r.Update(ctx, svc)
+		return true, requeue
+	}
+	// Schedule requeue based on provider time
+	if svc.Annotations == nil {
+		svc.Annotations = map[string]string{}
+	}
+	svc.Annotations[AnnotationSizeUnit] = itoa(previous)
+	svc.Annotations[AnnotationResizeNotBefore] = nextAt.Format(time.RFC3339)
+	_ = r.Update(ctx, svc)
+	requeue := time.Until(nextAt)
+	if requeue < 5*time.Second {
+		requeue = 5 * time.Second
+	}
+	if requeue > 2*time.Minute {
+		requeue = 2 * time.Minute
+	}
+	return true, requeue
+}
+
+// parseNextAvailableTime extracts a timestamp from an error string like:
+// "next available resize at: 2025-08-13 20:09:13 +0000 UTC"
+func parseNextAvailableTime(errMsg string) (time.Time, bool) {
+	idx := strings.Index(errMsg, "next available resize at:")
+	if idx == -1 {
+		return time.Time{}, false
+	}
+	// Extract substring after the marker
+	part := strings.TrimSpace(errMsg[idx+len("next available resize at:"):])
+	// The provider uses Go's time.String() format: "2006-01-02 15:04:05 -0700 MST"
+	layout := "2006-01-02 15:04:05 -0700 MST"
+	if t, err := time.Parse(layout, part); err == nil {
+		return t.UTC(), true
+	}
+	// Try RFC3339 as a fallback
+	if t, err := time.Parse(time.RFC3339, part); err == nil {
+		return t.UTC(), true
+	}
+	return time.Time{}, false
 }
 
 func computeDesiredNodes(ann map[string]string, targetPerNode int, metricValue float64) int {
