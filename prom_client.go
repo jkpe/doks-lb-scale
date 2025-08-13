@@ -91,22 +91,4 @@ func (p *PromClient) GetValue(ctx context.Context, _ string, metric string) (flo
 	return out, nil
 }
 
-// MuxMetrics routes to Prometheus when the metric begins with "promql:",
-// otherwise routes to the DigitalOcean metrics client.
-type MuxMetrics struct {
-	DO   *DOClient
-	Prom *PromClient
-}
-
-func (m *MuxMetrics) GetValue(ctx context.Context, lbID string, metric string) (float64, error) {
-	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(metric)), "promql:") {
-		if m.Prom == nil {
-			return 0, errors.New("prometheus client not configured")
-		}
-		return m.Prom.GetValue(ctx, lbID, metric)
-	}
-	if m.DO == nil {
-		return 0, errors.New("digitalocean client not configured")
-	}
-	return m.DO.GetValue(ctx, lbID, metric)
-}
+// Prometheus-only: the controller must be configured with promql: metrics.
