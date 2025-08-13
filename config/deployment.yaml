@@ -21,19 +21,13 @@ spec:
           image: registry.digitalocean.com/strapi-jkpe/doks-lb-scale:latest
           imagePullPolicy: Always
           args:
-            - "--do-token=$(DIGITALOCEAN_LB_SCALE_TOKEN)"
             - "--verbose=$(DOKS_LB_SCALE_VERBOSE)"
             - "--prom-url=$(PROMETHEUS_URL)"
           env:
-            - name: DIGITALOCEAN_LB_SCALE_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: digitalocean-lb-scale
-                  key: token
             - name: DOKS_LB_SCALE_VERBOSE
               value: "true"
             - name: PROMETHEUS_URL
-              value: "http://ingress-nginx-controller-metrics:9090"
+              value: "http://kube-prometheus-stack-prometheus.kube-prometheus-stack.svc:9090"
           ports:
             - name: healthz
               containerPort: 8080

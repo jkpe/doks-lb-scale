@@ -11,6 +11,7 @@ metadata:
     doks-lb-scale/hysteresis-percent: "20"
     doks-lb-scale/min-nodes: "1"
     doks-lb-scale/max-nodes: "50"
+    doks-lb-scale/scale-down-delay-minutes: "10"
 spec:
   type: LoadBalancer
   selector:
