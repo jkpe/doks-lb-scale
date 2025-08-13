@@ -21,6 +21,17 @@ DigitalOcean Cloud Controller Manager applies annotation changes to the actual L
   - [Kubernetes Monitoring Stack](https://marketplace.digitalocean.com/apps/kubernetes-monitoring-stack) (kube-prometheus-stack)
   - [Nginx Ingress Controller](https://marketplace.digitalocean.com/apps/nginx-ingress-controller) (optional, any ingress controller should work)
 
+## Deploy
+
+- Apply RBAC and Deployment:
+ 
+```bash
+kubectl apply -f config/rbac.yaml
+kubectl apply -f config/deployment.yaml
+```
+
+Set the Prometheus URL via the `--prom-url` flag or `PROMETHEUS_URL` env var. The provided deployment sets `PROMETHEUS_URL` to `http://ingress-nginx-controller-metrics:9090` by default; adjust to your cluster.
+
 ## Required annotations
 
 - `kubernetes.digitalocean.com/load-balancer-id`: the DO LB ID.
@@ -88,22 +99,6 @@ controller:
 ```
 
 Pair this with the Prometheus-based example in the previous section (using `promql:sum(rate(nginx_ingress_controller_requests{ingress!="",status!=""}[1m]))`).
-
-<!-- NLB throughput example removed: Prometheus-only ingress metrics supported -->
-
-## Deploy
-
-- Apply RBAC and Deployment:
-
- 
-```bash
-kubectl apply -f config/rbac.yaml
-kubectl apply -f config/deployment.yaml
-```
-
-Set the Prometheus URL via the `--prom-url` flag or `PROMETHEUS_URL` env var. The provided deployment sets `PROMETHEUS_URL` to `http://ingress-nginx-controller-metrics:9090` by default; adjust to your cluster.
-
-After pushing, update `config/deployment.yaml` to point to your published image.
 
 ## Notes
 
