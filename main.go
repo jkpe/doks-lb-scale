@@ -34,9 +34,8 @@ const (
 	AnnotationMaxNodes           = "doks-lb-scale/max-nodes"                // default 200
 	AnnotationScaleDownDelayMin  = "doks-lb-scale/scale-down-delay-minutes" // optional; default 0 (no delay)
 	AnnotationScaleDownNotBefore = "doks-lb-scale/scale-down-not-before"    // controller-managed RFC3339 timestamp
-	// Global resize cooldown to avoid provider rate limits
-	AnnotationMinResizeIntervalMin = "doks-lb-scale/min-resize-interval-minutes" // optional; default 0 (no cooldown)
-	AnnotationResizeNotBefore      = "doks-lb-scale/resize-not-before"           // controller-managed RFC3339 timestamp
+	// Controller-managed cooldown set after provider 429s
+	AnnotationResizeNotBefore = "doks-lb-scale/resize-not-before" // controller-managed RFC3339 timestamp
 )
 
 var (
@@ -201,7 +200,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		}
 	}
 
-	// Enforce global resize cooldown regardless of direction
+	// Enforce provider-driven cooldown if previously rate limited
 	if svc.Annotations == nil {
 		svc.Annotations = map[string]string{}
 	}
@@ -230,11 +229,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		klog.InfoS("updating service size-unit", "from", current, "to", desired, "service", req.NamespacedName)
 	}
 	svc.Annotations[AnnotationSizeUnit] = itoa(desired)
-	// If a cooldown interval is configured, set a not-before timestamp now to guard subsequent reconciles
-	if minIntervalMin := parseIntDefault(svc.Annotations[AnnotationMinResizeIntervalMin], 0); minIntervalMin > 0 {
-		notBefore := time.Now().UTC().Add(time.Duration(minIntervalMin) * time.Minute)
-		svc.Annotations[AnnotationResizeNotBefore] = notBefore.Format(time.RFC3339)
-	}
 	if err := r.Update(ctx, &svc); err != nil {
 		// Handle provider rate limit style errors by scheduling next allowed time
 		handled, requeueAfter := r.handleResizeRateLimited(ctx, &svc, current, err)
@@ -265,29 +259,28 @@ func (r *Reconciler) handleResizeRateLimited(ctx context.Context, svc *corev1.Se
 	// Try to parse provider "next available resize at" timestamp if present
 	nextAt, ok := parseNextAvailableTime(updateErr.Error())
 	if !ok {
-		// Fall back to configured cooldown or 60s
+		// Fall back to a safe short cooldown (60s)
 		requeue := 60 * time.Second
-		if svc.Annotations != nil {
-			if minIntervalMin := parseIntDefault(svc.Annotations[AnnotationMinResizeIntervalMin], 0); minIntervalMin > 0 {
-				requeue = time.Duration(minIntervalMin) * time.Minute
+		// Fetch latest Service to avoid resubmitting rejected size change
+		var fresh corev1.Service
+		if err := r.Get(ctx, client.ObjectKey{Namespace: svc.Namespace, Name: svc.Name}, &fresh); err == nil {
+			if fresh.Annotations == nil {
+				fresh.Annotations = map[string]string{}
 			}
+			fresh.Annotations[AnnotationResizeNotBefore] = time.Now().UTC().Add(requeue).Format(time.RFC3339)
+			_ = r.Update(ctx, &fresh)
 		}
-		// Roll back size change and set not-before
-		if svc.Annotations == nil {
-			svc.Annotations = map[string]string{}
-		}
-		svc.Annotations[AnnotationSizeUnit] = itoa(previous)
-		svc.Annotations[AnnotationResizeNotBefore] = time.Now().UTC().Add(requeue).Format(time.RFC3339)
-		_ = r.Update(ctx, svc)
 		return true, requeue
 	}
-	// Schedule requeue based on provider time
-	if svc.Annotations == nil {
-		svc.Annotations = map[string]string{}
+	// Schedule requeue based on provider time using latest Service
+	var fresh corev1.Service
+	if err := r.Get(ctx, client.ObjectKey{Namespace: svc.Namespace, Name: svc.Name}, &fresh); err == nil {
+		if fresh.Annotations == nil {
+			fresh.Annotations = map[string]string{}
+		}
+		fresh.Annotations[AnnotationResizeNotBefore] = nextAt.Format(time.RFC3339)
+		_ = r.Update(ctx, &fresh)
 	}
-	svc.Annotations[AnnotationSizeUnit] = itoa(previous)
-	svc.Annotations[AnnotationResizeNotBefore] = nextAt.Format(time.RFC3339)
-	_ = r.Update(ctx, svc)
 	requeue := time.Until(nextAt)
 	if requeue < 5*time.Second {
 		requeue = 5 * time.Second
