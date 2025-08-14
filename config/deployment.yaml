@@ -20,10 +20,16 @@ spec:
           imagePullPolicy: Always
           args:
             - "--verbose=$(DOKS_LB_SCALE_VERBOSE)"
+            - "--do-token=$(DO_API_TOKEN)"
             - "--prom-url=$(PROMETHEUS_URL)"
           env:
             - name: DOKS_LB_SCALE_VERBOSE
               value: "true"
+            - name: DO_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: doks-lb-scale-secret
+                  key: token
             - name: PROMETHEUS_URL
               value: "http://kube-prometheus-stack-prometheus.kube-prometheus-stack.svc:9090"
           ports:

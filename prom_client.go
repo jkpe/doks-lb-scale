@@ -92,3 +92,4 @@ func (p *PromClient) GetValue(ctx context.Context, _ string, metric string) (flo
 }
 
 // Prometheus-only: the controller must be configured with promql: metrics.
+// When used with MuxMetrics, both DO API and Prometheus metrics are supported.

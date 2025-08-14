@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"os"
 	"strings"
@@ -51,6 +52,31 @@ type MetricsClient interface {
 	GetValue(ctx context.Context, lbID string, metric string) (float64, error)
 }
 
+// MuxMetrics routes metric requests to either DO API or Prometheus based on metric prefix
+type MuxMetrics struct {
+	DO   *DOClient
+	Prom *PromClient
+}
+
+func (m *MuxMetrics) GetValue(ctx context.Context, lbID string, metric string) (float64, error) {
+	if strings.HasPrefix(metric, "promql:") {
+		if m.Prom == nil {
+			return 0, errors.New("prometheus not configured")
+		}
+		return m.Prom.GetValue(ctx, lbID, metric)
+	}
+	if m.DO == nil {
+		return 0, errors.New("digitalocean not configured")
+	}
+	return m.DO.GetValue(ctx, lbID, metric)
+}
+
+type DOClient struct {
+	APIToken string
+}
+
+// Implementation in do_client.go
+
 // Prometheus implementation in prom_client.go
 
 type Reconciler struct {
@@ -79,10 +105,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		return reconcile.Result{}, nil
 	}
 
-	// Only ingress/HTTP style metrics via Prometheus are supported. Require req=INT.
-	targetPerNode, ok := resolveStrictTargetPerNode(rawTarget)
+	category := categoryFromMetric(metric) // "req" or "nlb"
+	if category == "nlb" && !isThroughputMetric(metric) {
+		klog.InfoS("skipping scale: NLB requires throughput metric", "metric", metric, "service", req.NamespacedName)
+		return reconcile.Result{RequeueAfter: 60 * time.Second}, nil
+	}
+
+	targetPerNode, ok := resolveStrictTargetPerNode(rawTarget, category)
 	if !ok {
-		klog.InfoS("skipping scale: target-per-node must be req=INT", "target", rawTarget, "service", req.NamespacedName)
+		klog.InfoS("skipping scale: target-per-node must specify exactly one of req= or nlb= and match metric category", "target", rawTarget, "category", category, "service", req.NamespacedName)
 		return reconcile.Result{RequeueAfter: 60 * time.Second}, nil
 	}
 
@@ -329,8 +360,8 @@ func computeDesiredNodes(ann map[string]string, targetPerNode int, metricValue f
 }
 
 // resolveStrictTargetPerNode enforces required keyed single-entry config.
-// Only "req=INT" is supported when relying on ingress metrics.
-func resolveStrictTargetPerNode(raw string) (int, bool) {
+// raw must be either "req=INT" or "nlb=INT"; returns value only if key matches category.
+func resolveStrictTargetPerNode(raw string, category string) (int, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return 0, false
@@ -345,13 +376,29 @@ func resolveStrictTargetPerNode(raw string) (int, bool) {
 	}
 	key := strings.ToLower(strings.TrimSpace(kv[0]))
 	val := strings.TrimSpace(kv[1])
-	if key != "req" {
+	if key != "req" && key != "nlb" {
+		return 0, false
+	}
+	if key != category {
 		return 0, false
 	}
 	return parseIntDefault(val, 0), true
 }
 
-// No category detection needed; only req-based scaling supported.
+// categoryFromMetric maps metrics to logical categories used for target-per-node keys.
+// Returns "nlb" for NLB throughput metrics, otherwise "req".
+func categoryFromMetric(metric string) string {
+	m := strings.ToLower(metric)
+	if isThroughputMetric(m) {
+		return "nlb"
+	}
+	return "req"
+}
+
+func isThroughputMetric(metric string) bool {
+	m := strings.ToLower(metric)
+	return strings.Contains(m, "nlb_tcp_network_throughput") || strings.Contains(m, "nlb_udp_network_throughput")
+}
 
 func parseIntDefault(s string, def int) int {
 	if s == "" {
@@ -403,9 +450,11 @@ func main() {
 	var addr string
 	var verboseFlag bool
 	var promURL string
+	var doToken string
 	flag.StringVar(&addr, "bind", ":8080", "healthz bind address")
 	flag.BoolVar(&verboseFlag, "verbose", false, "enable verbose logging")
 	flag.StringVar(&promURL, "prom-url", os.Getenv("PROMETHEUS_URL"), "Prometheus base URL, e.g. http://prometheus-server.monitoring.svc:9090")
+	flag.StringVar(&doToken, "do-token", os.Getenv("DO_API_TOKEN"), "DigitalOcean API token")
 	opts := zap.Options{Development: false}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -425,7 +474,10 @@ func main() {
 	}
 
 	verbose := verboseFlag || envBool("DOKS_LB_SCALE_VERBOSE")
-	metricsClient := &PromClient{BaseURL: strings.TrimSpace(promURL)}
+	metricsClient := &MuxMetrics{DO: &DOClient{APIToken: strings.TrimSpace(doToken)}}
+	if strings.TrimSpace(promURL) != "" {
+		metricsClient.Prom = &PromClient{BaseURL: strings.TrimSpace(promURL)}
+	}
 	reconciler := &Reconciler{Client: mgr.GetClient(), Metrics: metricsClient, Verbose: verbose}
 	if err := builder.ControllerManagedBy(mgr).
 		For(&corev1.Service{}, builder.WithPredicates(serviceHasLBAnnotations())).
