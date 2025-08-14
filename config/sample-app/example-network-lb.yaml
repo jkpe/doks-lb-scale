@@ -7,7 +7,7 @@ metadata:
     service.beta.kubernetes.io/do-loadbalancer-type: "REGIONAL_NETWORK" # DigitalOcean Network Load Balancer
     service.beta.kubernetes.io/do-loadbalancer-size-unit: "1"
     # Scale by TCP throughput observed by DigitalOcean Monitoring
-    doks-lb-scale/metric: "nlb_tcp_network_throughput"
+    doks-lb-scale/metric: "frontend_nlb_tcp_network_throughput"
     doks-lb-scale/target-per-node: "nlb=45"
     doks-lb-scale/hysteresis-percent: "20"
     doks-lb-scale/min-nodes: "1"

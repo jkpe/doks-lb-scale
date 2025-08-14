@@ -54,11 +54,11 @@ You can configure both sources simultaneously - the controller will route reques
 
 - `kubernetes.digitalocean.com/load-balancer-id`: the DO LB ID.
 - `doks-lb-scale/metric`: the metric to use:
-  - **DO API metrics**: Direct metric names (e.g., `nlb_tcp_network_throughput`, `requests_per_second`)
+  - **DO API metrics**: Direct metric names (e.g., `frontend_nlb_tcp_network_throughput`, `requests_per_second`)
   - **Prometheus metrics**: Must be prefixed with `promql:` (e.g., `promql:sum(rate(nginx_ingress_controller_requests[1m]))`)
 - `doks-lb-scale/target-per-node`: REQUIRED: 
   - `req=<int>` for request-based metrics (HTTP requests, ingress metrics)
-  - `nlb=<int>` for NLB throughput metrics (Mbps)
+  - `nlb=<int>` for NLB throughput metrics specified in Mbps per node. The DigitalOcean API returns throughput in bytes/sec; the controller converts this to Mbps internally before computing desired nodes.
 
 Optional annotations:
 - `doks-lb-scale/hysteresis-percent`: default `20`.
@@ -105,8 +105,8 @@ metadata:
     kubernetes.digitalocean.com/load-balancer-id: "your-load-balancer-id"
     service.beta.kubernetes.io/do-loadbalancer-type: "REGIONAL_NETWORK" # DigitalOcean Network Load Balancer
     service.beta.kubernetes.io/do-loadbalancer-size-unit: "1"
-    doks-lb-scale/metric: "nlb_tcp_network_throughput"
-    doks-lb-scale/target-per-node: "nlb=45" # Mbps per node
+    doks-lb-scale/metric: "frontend_nlb_tcp_network_throughput"
+    doks-lb-scale/target-per-node: "nlb=45" # Mbps per node (controller converts DO bytes/sec to Mbps)
     doks-lb-scale/hysteresis-percent: "20"
     doks-lb-scale/min-nodes: "1"
     doks-lb-scale/max-nodes: "50"
@@ -182,7 +182,7 @@ The controller supports two metric categories:
 - **Use case**: HTTP/ingress traffic scaling
 
 ### NLB Throughput metrics (`nlb=INT`)
-- **DO API**: `nlb_tcp_network_throughput`, `nlb_udp_network_throughput`
+- **DO API**: `frontend_nlb_tcp_network_throughput`, `frontend_nlb_udp_network_throughput`
 - **Prometheus**: Not supported for NLB metrics
 - **Use case**: Network load balancer throughput scaling
 

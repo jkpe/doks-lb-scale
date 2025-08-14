@@ -44,7 +44,10 @@ func (d *DOClient) GetValue(ctx context.Context, lbID string, metric string) (fl
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return 0, fmt.Errorf("do metrics http %d", resp.StatusCode)
+		if resp.StatusCode == http.StatusNotFound {
+			return 0, fmt.Errorf("do metrics http 404 for path %q (requested metric %q)", req.URL.Path, metric)
+		}
+		return 0, fmt.Errorf("do metrics http %d for path %q", resp.StatusCode, req.URL.Path)
 	}
 
 	var parsed doMetricsResponse

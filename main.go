@@ -125,6 +125,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reco
 		klog.ErrorS(err, "failed to fetch metrics", "lbID", lbID, "metric", metric)
 		return reconcile.Result{RequeueAfter: time.Minute}, nil
 	}
+	// For NLB throughput metrics, DO returns bytes/sec. Convert to Mbps so it
+	// matches the semantics of target-per-node key `nlb=INT` (INT in Mbps).
+	if category == "nlb" {
+		// bytes/sec -> megabits/sec (Mbps). Use decimal megabits (1e6), not mebibits.
+		value = (value * 8.0) / 1_000_000.0
+	}
 	if r.Verbose {
 		klog.InfoS("metrics value", "value", value, "service", req.NamespacedName)
 	}
