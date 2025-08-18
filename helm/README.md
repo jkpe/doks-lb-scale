@@ -4,10 +4,10 @@ This Helm chart deploys the DOKS Load Balancer Scale Controller, a Kubernetes co
 
 ## Prerequisites
 
-- Kubernetes 1.21+
+- Kubernetes 1.31+
 - Helm 3.0+
 - DigitalOcean API token (optional - only required if using DO API metrics)
-- (Optional) Prometheus for custom metrics
+- Prometheus (optional)
 
 ### Get Your DigitalOcean API Token (Optional)
 
