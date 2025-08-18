@@ -2,7 +2,7 @@
 
 https://github.com/user-attachments/assets/9ab9f805-df87-49f1-98b4-edceb66a5b2f
 
-A lightweight Kubernetes controller that automatically scales a DigitalOcean Load Balancer node size (size unit) based on metrics from either the DigitalOcean API or Prometheus.
+A lightweight Kubernetes ([DOKS](https://docs.digitalocean.com/products/kubernetes/)) controller that automatically scales a DigitalOcean [Load Balancer](https://docs.digitalocean.com/products/networking/load-balancers/) based on metrics from either the DigitalOcean [API](https://docs.digitalocean.com/reference/api/digitalocean/) or Prometheus.
 
 ## How it works
 
@@ -15,17 +15,17 @@ A lightweight Kubernetes controller that automatically scales a DigitalOcean Loa
 
 DigitalOcean Cloud Controller Manager applies annotation changes to the actual Load Balancer.
 
-## Prerequisites
+## Prometheus Prerequisites
 
 - Install from the DigitalOcean Kubernetes Marketplace:
   - [Kubernetes Metrics Server](https://marketplace.digitalocean.com/apps/kubernetes-metrics-server)
-  - [Kubernetes Monitoring Stack](https://marketplace.digitalocean.com/apps/kubernetes-monitoring-stack) (kube-prometheus-stack) - *optional, only needed for Prometheus metrics*
-  - [Nginx Ingress Controller](https://marketplace.digitalocean.com/apps/nginx-ingress-controller) (optional, any ingress controller should work)
+  - [Kubernetes Monitoring Stack](https://marketplace.digitalocean.com/apps/kubernetes-monitoring-stack)
+  - [Nginx Ingress Controller](https://marketplace.digitalocean.com/apps/nginx-ingress-controller) (any ingress controller that exports metrics to Prometheus, such as Traefik, should work)
 
 ## Deploy
 
 - Create a DigitalOcean API token with least privileges:
-  - Create a token with Custom Scopes following the official guide: [`Create a personal access token`](https://docs.digitalocean.com/reference/api/create-personal-access-token/)
+  - Create a token with [Custom Scopes](https://docs.digitalocean.com/reference/api/create-personal-access-token/)
   - Grant only these scopes:
     - `monitoring:read`
 - Create a Kubernetes secret with your DigitalOcean API token:
