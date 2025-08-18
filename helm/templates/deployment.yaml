@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "doks-lb-scale.deploymentName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "doks-lb-scale.labels" . | nindent 4 }}
+  {{- with .Values.deployment.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.deployment.replicas }}
+  selector:
+    matchLabels:
+      {{- include "doks-lb-scale.selectorLabels" . | nindent 6 }}
+  {{- with .Values.deployment.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "doks-lb-scale.selectorLabels" . | nindent 8 }}
+      {{- with .Values.pod.annotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "doks-lb-scale.serviceAccountName" . }}
+      {{- with .Values.pod.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.pod.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pod.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pod.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Values.container.name }}
+          image: {{ include "doks-lb-scale.image" . }}
+          imagePullPolicy: {{ include "doks-lb-scale.imagePullPolicy" . }}
+          {{- with .Values.container.command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          args:
+            - "--bind={{ .Values.config.bindAddress }}"
+            {{- if .Values.config.verbose }}
+            - "--verbose=true"
+            {{- end }}
+            {{- if .Values.config.doApiToken }}
+            - "--do-token=$(DO_API_TOKEN)"
+            {{- end }}
+            {{- if .Values.config.prometheusUrl }}
+            - "--prom-url={{ .Values.config.prometheusUrl }}"
+            {{- end }}
+            {{- with .Values.container.args }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: {{ .Values.container.portName }}
+              containerPort: {{ .Values.container.port }}
+              protocol: TCP
+          {{- with .Values.container.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.config.doApiToken }}
+          env:
+            - name: DO_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "doks-lb-scale.secretName" . }}
+                  key: token
+            {{- if .Values.config.prometheusUrl }}
+            - name: PROMETHEUS_URL
+              value: {{ .Values.config.prometheusUrl | quote }}
+            {{- end }}
+            - name: DOKS_LB_SCALE_VERBOSE
+              value: {{ .Values.config.verbose | quote }}
+          {{- end }}
+          {{- with .Values.container.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.container.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.healthChecks.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.healthChecks.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}

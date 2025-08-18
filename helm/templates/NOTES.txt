@@ -1,0 +1,31 @@
+Thank you for installing {{ .Chart.Name }}.
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }}
+  $ helm get all {{ .Release.Name }}
+
+{{- if .Values.config.doApiToken }}
+The DigitalOcean API token has been configured via secret.
+{{- else }}
+WARNING: No DigitalOcean API token configured. Please set config.doApiToken in your values.
+{{- end }}
+
+{{- if .Values.config.prometheusUrl }}
+Prometheus integration is configured at: {{ .Values.config.prometheusUrl }}
+{{- else }}
+No Prometheus URL configured. Only DigitalOcean metrics will be available.
+{{- end }}
+
+{{- if .Values.config.verbose }}
+Verbose logging is enabled.
+{{- end }}
+
+The controller is now running and will monitor LoadBalancer services with the following annotations:
+- kubernetes.digitalocean.com/load-balancer-id
+- doks-lb-scale/metric
+- doks-lb-scale/target-per-node
+
+For more information, visit: {{ .Chart.Home }}

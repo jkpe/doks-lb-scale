@@ -1,0 +1,19 @@
+apiVersion: v2
+name: doks-lb-scale
+description: A Kubernetes controller for scaling DigitalOcean load balancers based on metrics
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - kubernetes
+  - digitalocean
+  - load-balancer
+  - autoscaling
+  - controller
+home: https://github.com/jkpe/doks-lb-scale
+sources:
+  - https://github.com/jkpe/doks-lb-scale
+maintainers:
+  - name: Jack Pearce
+    email: jpearce@digitalocean.com
+kubeVersion: ">=1.31.0"

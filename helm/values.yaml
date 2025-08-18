@@ -1,0 +1,107 @@
+# Production values for doks-lb-scale
+# This file contains recommended settings for production deployments
+
+# Image settings
+image:
+  registry: "ghcr.io"
+  repository: "jkpe/doks-lb-scale"
+  tag: "v0.2.1-beta"
+  pullPolicy: Always
+
+# Deployment configuration
+deployment:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+# Pod configuration
+pod:
+  priorityClassName: "system-cluster-critical"
+
+# Container configuration
+container:
+  name: doks-lb-scale
+  portName: healthz
+  port: 8080
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+
+# Configuration
+config:
+  verbose: false
+  bindAddress: ":8080"
+  doApiToken: ""
+  prometheusUrl: ""
+
+# Secret configuration
+secret:
+  create: false
+  type: Opaque
+
+# ServiceAccount configuration
+serviceAccount:
+  create: true
+  annotations: {}
+
+# RBAC configuration
+rbac:
+  create: true
+  clusterRoleAnnotations: {}
+
+# Pod disruption budget
+podDisruptionBudget:
+  create: true
+  minAvailable: 1
+
+# Health checks
+healthChecks:
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: healthz
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: healthz
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+    successThreshold: 1
+
+# Pod security context
+podSecurityContext:
+  fsGroup: 65532
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+
+# Container security context
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+
+# Logging configuration
+logging:
+  level: info
+  development: false
+  json: true
