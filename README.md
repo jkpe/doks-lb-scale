@@ -22,6 +22,28 @@ DigitalOcean Cloud Controller Manager applies annotation changes to the actual L
   - [Kubernetes Monitoring Stack](https://marketplace.digitalocean.com/apps/kubernetes-monitoring-stack)
   - [Nginx Ingress Controller](https://marketplace.digitalocean.com/apps/nginx-ingress-controller) (any ingress controller that exports metrics to Prometheus, such as Traefik, should work)
 
+### Nginx Ingress Controller ServiceMonitor
+
+If you're using nginx ingress controller with Prometheus metrics, you'll need to create a ServiceMonitor to enable Prometheus to scrape the nginx ingress controller metrics. Without this, the nginx ingress controller metrics won't be available for scaling decisions.
+
+Apply the ServiceMonitor:
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/jkpe/doks-lb-scale/refs/heads/main/config/nginx-ingress-servicemonitor.yaml
+```
+
+After applying the ServiceMonitor, verify that nginx ingress controller targets appear in Prometheus:
+
+```bash
+# Port-forward to Prometheus
+kubectl port-forward -n kube-prometheus-stack svc/prometheus-operated 9090:9090
+
+# Check for nginx targets
+curl -s http://127.0.0.1:9090/api/v1/targets | jq '.data.activeTargets[] | select(.labels.job == "ingress-nginx-controller-metrics")'
+```
+
+You should see targets with `"health": "up"` status.
+
 ## Deploy
 
 - Create a DigitalOcean API token with least privileges:
