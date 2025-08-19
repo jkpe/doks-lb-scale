@@ -13,7 +13,7 @@ config:
 image:
   registry: "ghcr.io"
   repository: "jkpe/doks-lb-scale"
-  tag: "v0.2.1-beta"
+  tag: "latest"
   pullPolicy: Always
 
 # Deployment configuration
