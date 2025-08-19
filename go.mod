@@ -1,4 +1,4 @@
-module github.com/your-org/doks-lb-scale
+module github.com/jkpe/doks-lb-scale
 
 go 1.24.6
 

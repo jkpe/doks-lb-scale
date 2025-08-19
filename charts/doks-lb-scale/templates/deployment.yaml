@@ -60,7 +60,7 @@ spec:
             {{- if .Values.config.verbose }}
             - "--verbose=true"
             {{- end }}
-            {{- if .Values.config.doApiToken }}
+            {{- if or .Values.config.doApiToken .Values.config.doApiTokenSecret }}
             - "--do-token=$(DO_API_TOKEN)"
             {{- end }}
             {{- if .Values.config.prometheusUrl }}
@@ -73,24 +73,23 @@ spec:
             - name: {{ .Values.container.portName }}
               containerPort: {{ .Values.container.port }}
               protocol: TCP
-          {{- with .Values.container.env }}
           env:
+            {{- with .Values.container.env }}
             {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- if .Values.config.doApiToken }}
-          env:
+            {{- end }}
+            {{- if .Values.config.doApiTokenSecret }}
             - name: DO_API_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "doks-lb-scale.secretName" . }}
+                  name: {{ .Values.config.doApiTokenSecret }}
                   key: token
+            {{- end }}
             {{- if .Values.config.prometheusUrl }}
             - name: PROMETHEUS_URL
               value: {{ .Values.config.prometheusUrl | quote }}
             {{- end }}
             - name: DOKS_LB_SCALE_VERBOSE
               value: {{ .Values.config.verbose | quote }}
-          {{- end }}
           {{- with .Values.container.envFrom }}
           envFrom:
             {{- toYaml . | nindent 12 }}

@@ -1,6 +1,14 @@
 # Production values for doks-lb-scale
 # This file contains recommended settings for production deployments
 
+# Configuration
+config:
+  verbose: false
+  bindAddress: ":8080"
+  doApiToken: ""
+  doApiTokenSecret: ""
+  prometheusUrl: ""
+
 # Image settings
 image:
   registry: "ghcr.io"
@@ -33,18 +41,6 @@ container:
     requests:
       cpu: 200m
       memory: 256Mi
-
-# Configuration
-config:
-  verbose: false
-  bindAddress: ":8080"
-  doApiToken: ""
-  prometheusUrl: ""
-
-# Secret configuration
-secret:
-  create: false
-  type: Opaque
 
 # ServiceAccount configuration
 serviceAccount:

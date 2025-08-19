@@ -20,7 +20,7 @@ This Helm chart deploys the DOKS Load Balancer Scale Controller, a Kubernetes co
 - Create a Kubernetes secret with your DigitalOcean API token:
 
 ```bash
-kubectl -n kube-system create secret generic doks-lb-scale-secret --from-literal=token=$DO_API_TOKEN
+kubectl -n kube-system create secret generic doks-lb-scale-secret --from-literal=token=your-do-api-token-here
 ```
 
 ## Installation
@@ -28,36 +28,32 @@ kubectl -n kube-system create secret generic doks-lb-scale-secret --from-literal
 ### Quick Start
 
 ```bash
-# Add the repository (if published)
 helm repo add doks-lb-scale https://your-repo-url
 helm repo update
-
-# Install with default values
-helm install doks-lb-scale doks-lb-scale/doks-lb-scale \
-  --namespace kube-system \
-  --create-namespace
 ```
 
-### With Custom Values
+#### Install with existing DO API secret (for DO API metrics)
 
 ```bash
-# Install with DO API token (for DO API metrics)
 helm install doks-lb-scale ./helm \
   --namespace kube-system \
-  --create-namespace \
-  --set config.doApiToken="your-do-api-token-here"
+  --set config.doApiTokenSecret="doks-lb-scale-secret"
+```
 
-# Or install with Prometheus URL only (no DO API token needed)
+#### Install with Prometheus URL only
+
+```bash
 helm install doks-lb-scale ./helm \
   --namespace kube-system \
-  --create-namespace \
   --set config.prometheusUrl="http://kube-prometheus-stack-prometheus.kube-prometheus-stack.svc:9090"
+```
 
-# Or install with both (optional)
+#### Install with both
+
+```bash
 helm install doks-lb-scale ./helm \
   --namespace kube-system \
-  --create-namespace \
-  --set config.doApiToken="your-do-api-token-here" \
+  --set config.doApiTokenSecret="doks-lb-scale-secret" \
   --set config.prometheusUrl="http://kube-prometheus-stack-prometheus.kube-prometheus-stack.svc:9090"
 ```
 
@@ -65,37 +61,14 @@ helm install doks-lb-scale ./helm \
 
 ```bash
 # Install from local chart directory
-helm install doks-lb-scale ./helm \
+helm install doks-lb-scale ./charts/doks-lb-scale \
   --namespace kube-system \
-  --create-namespace \
-  --values helm/values-production.yaml
+  --values charts/doks-lb-scale/values.yaml
 ```
 
 ## Configuration
 
 For detailed configuration options, service annotations, and usage examples, please refer to the [main README](../README.md).
-
-### Optional Configuration
-
-#### DigitalOcean API Token (Optional)
-
-The controller can use either DigitalOcean API metrics or Prometheus metrics. The DO API token is only required if you're using DO API metrics.
-
-```yaml
-config:
-  doApiToken: "your-do-api-token-here"  # Optional - only needed for DO API metrics
-```
-
-#### Prometheus Integration
-
-To use custom Prometheus metrics instead of or alongside DigitalOcean metrics:
-
-```yaml
-config:
-  prometheusUrl: "http://prometheus-server.monitoring.svc:9090"
-```
-
-**Note**: You can run the controller with only Prometheus metrics (no DO API token required) or only DO API metrics (no Prometheus required), or both together.
 
 #### Verbose Logging
 
@@ -114,7 +87,7 @@ config:
 | `image.tag` | Container image tag | `latest` |
 | `deployment.replicas` | Number of replicas | `1` |
 | `config.verbose` | Enable verbose logging | `false` |
-| `config.doApiToken` | DigitalOcean API token | `""` |
+| `config.doApiTokenSecret` | Name of existing secret containing DO API token | `""` |
 | `config.prometheusUrl` | Prometheus server URL | `""` |
 | `service.create` | Create service for monitoring | `false` |
 | `serviceMonitor.create` | Create ServiceMonitor | `false` |
@@ -126,7 +99,7 @@ config:
 # Upgrade the release
 helm upgrade doks-lb-scale doks-lb-scale/doks-lb-scale \
   --namespace kube-system \
-  --values values-production.yaml
+  --values charts/doks-lb-scale/values.yaml
 ```
 
 ## Uninstalling

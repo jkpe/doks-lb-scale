@@ -53,7 +53,7 @@ You should see targets with `"health": "up"` status.
 - Create a Kubernetes secret with your DigitalOcean API token:
 
 ```bash
-kubectl -n kube-system create secret generic doks-lb-scale-secret --from-literal=token=$DO_API_TOKEN
+kubectl -n kube-system create secret generic doks-lb-scale-secret --from-literal=token=your-do-api-token-here
 ```
 
 - Apply RBAC and Deployment:

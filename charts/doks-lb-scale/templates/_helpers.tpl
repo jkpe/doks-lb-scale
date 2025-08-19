@@ -65,11 +65,7 @@ Create the name of the service account to use
 Create the name of the secret to use
 */}}
 {{- define "doks-lb-scale.secretName" -}}
-{{- if .Values.secret.create }}
-{{- default (include "doks-lb-scale.fullname" .) .Values.secret.name }}
-{{- else }}
-{{- .Values.secret.name }}
-{{- end }}
+{{- .Values.config.doApiTokenSecret }}
 {{- end }}
 
 {{/*
