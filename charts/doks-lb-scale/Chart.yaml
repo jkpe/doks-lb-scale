@@ -2,7 +2,7 @@ apiVersion: v2
 name: doks-lb-scale
 description: A Kubernetes controller for scaling DigitalOcean load balancers based on metrics
 type: application
-version: 0.2.0
+version: 0.3.0
 appVersion: "v0.3.0-beta"
 keywords:
   - kubernetes
