@@ -35,7 +35,7 @@ helm repo update
 #### Install with existing DO API secret (for DO API metrics)
 
 ```bash
-helm install doks-lb-scale ./helm \
+helm install doks-lb-scale ./charts/doks-lb-scale \
   --namespace kube-system \
   --set config.doApiTokenSecret="doks-lb-scale-secret"
 ```
@@ -43,7 +43,7 @@ helm install doks-lb-scale ./helm \
 #### Install with Prometheus URL only
 
 ```bash
-helm install doks-lb-scale ./helm \
+helm install doks-lb-scale ./charts/doks-lb-scale \
   --namespace kube-system \
   --set config.prometheusUrl="http://kube-prometheus-stack-prometheus.kube-prometheus-stack.svc:9090"
 ```
@@ -51,19 +51,10 @@ helm install doks-lb-scale ./helm \
 #### Install with both
 
 ```bash
-helm install doks-lb-scale ./helm \
+helm install doks-lb-scale ./charts/doks-lb-scale \
   --namespace kube-system \
   --set config.doApiTokenSecret="doks-lb-scale-secret" \
   --set config.prometheusUrl="http://kube-prometheus-stack-prometheus.kube-prometheus-stack.svc:9090"
-```
-
-### From Local Chart
-
-```bash
-# Install from local chart directory
-helm install doks-lb-scale ./charts/doks-lb-scale \
-  --namespace kube-system \
-  --values charts/doks-lb-scale/values.yaml
 ```
 
 ## Configuration
