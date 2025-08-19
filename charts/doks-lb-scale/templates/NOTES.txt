@@ -7,10 +7,10 @@ To learn more about the release, try:
   $ helm status {{ .Release.Name }}
   $ helm get all {{ .Release.Name }}
 
-{{- if .Values.config.doApiToken }}
+{{- if .Values.config.doApiTokenSecret }}
 The DigitalOcean API token has been configured via secret.
 {{- else }}
-WARNING: No DigitalOcean API token configured. Please set config.doApiToken in your values.
+WARNING: No DigitalOcean API token configured. Please set config.doApiTokenSecret in your values.
 {{- end }}
 
 {{- if .Values.config.prometheusUrl }}
