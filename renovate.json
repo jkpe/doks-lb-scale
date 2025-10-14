@@ -1,6 +1,25 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    "group:allNonMajor"
+  ],
+  "packageRules": [
+    {
+      "matchPackagePatterns": ["*"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "all non-major dependencies",
+      "groupSlug": "all-minor-patch"
+    },
+    {
+      "matchPackagePatterns": ["^golang\\.org/x/", "^github\\.com/"],
+      "groupName": "Go dependencies",
+      "groupSlug": "go-deps"
+    },
+    {
+      "matchPackagePatterns": ["^helm\\.sh/", "^kubernetes\\.io/"],
+      "groupName": "Kubernetes/Helm dependencies",
+      "groupSlug": "k8s-helm-deps"
+    }
   ]
 }

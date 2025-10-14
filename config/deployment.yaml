@@ -16,7 +16,7 @@ spec:
       serviceAccountName: doks-lb-scale-controller
       containers:
         - name: controller
-          image: ghcr.io/jkpe/doks-lb-scale:latest
+          image: ghcr.io/digitalocean-labs/doks-lb-scale:latest
           imagePullPolicy: Always
           args:
             - "--verbose=$(DOKS_LB_SCALE_VERBOSE)"

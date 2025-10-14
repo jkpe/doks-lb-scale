@@ -12,7 +12,7 @@ config:
 # Image settings
 image:
   registry: "ghcr.io"
-  repository: "jkpe/doks-lb-scale"
+  repository: "digitalocean-labs/doks-lb-scale"
   tag: "latest"
   pullPolicy: Always
 

@@ -29,7 +29,7 @@ If you're using nginx ingress controller with Prometheus metrics, you'll need to
 Apply the ServiceMonitor:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/jkpe/doks-lb-scale/refs/heads/main/config/nginx-ingress-servicemonitor.yaml
+kubectl apply -f https://raw.githubusercontent.com/digitalocean-labs/doks-lb-scale/refs/heads/main/config/nginx-ingress-servicemonitor.yaml
 ```
 
 After applying the ServiceMonitor, verify that nginx ingress controller targets appear in Prometheus:
@@ -59,8 +59,8 @@ kubectl -n kube-system create secret generic doks-lb-scale-secret --from-literal
 - Apply RBAC and Deployment:
  
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/jkpe/doks-lb-scale/refs/heads/main/config/rbac.yaml
-kubectl apply -f https://raw.githubusercontent.com/jkpe/doks-lb-scale/refs/heads/main/config/deployment.yaml
+kubectl apply -f https://raw.githubusercontent.com/digitalocean-labs/doks-lb-scale/refs/heads/main/config/rbac.yaml
+kubectl apply -f https://raw.githubusercontent.com/digitalocean-labs/doks-lb-scale/refs/heads/main/config/deployment.yaml
 ```
 
 ### Configuration Options

@@ -10,9 +10,9 @@ keywords:
   - load-balancer
   - autoscaling
   - controller
-home: https://github.com/jkpe/doks-lb-scale
+home: https://github.com/digitalocean-labs/doks-lb-scale
 sources:
-  - https://github.com/jkpe/doks-lb-scale
+  - https://github.com/digitalocean-labs/doks-lb-scale
 maintainers:
   - name: jkpe
     email: jpearce@digitalocean.com

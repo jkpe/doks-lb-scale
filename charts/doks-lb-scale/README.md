@@ -74,7 +74,7 @@ config:
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `image.repository` | Container image repository | `ghcr.io/jkpe/doks-lb-scale` |
+| `image.repository` | Container image repository | `ghcr.io/digitalocean-labs/doks-lb-scale` |
 | `image.tag` | Container image tag | `latest` |
 | `deployment.replicas` | Number of replicas | `1` |
 | `config.verbose` | Enable verbose logging | `false` |
@@ -136,5 +136,5 @@ The chart includes security best practices:
 
 For issues and questions:
 
-- GitHub Issues: [Repository Issues](https://github.com/jkpe/doks-lb-scale/issues)
-- Documentation: [Project Documentation](https://github.com/jkpe/doks-lb-scale)
+- GitHub Issues: [Repository Issues](https://github.com/digitalocean-labs/doks-lb-scale/issues)
+- Documentation: [Project Documentation](https://github.com/digitalocean-labs/doks-lb-scale)
